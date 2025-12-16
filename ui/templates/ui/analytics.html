@@ -1,0 +1,109 @@
+{% extends "ui/base.html" %}
+{% block title %}Аналитика{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">Аналитика</h4>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-3">
+    <label class="form-label">С</label>
+    <input class="form-control" type="date" name="from" value="{{ from }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">По</label>
+    <input class="form-control" type="date" name="to" value="{{ to }}">
+  </div>
+  <div class="col-md-2 d-grid align-items-end">
+    <button class="btn btn-primary mt-4">Показать</button>
+  </div>
+  <div class="col-md-4 d-grid align-items-end">
+  <a class="btn btn-outline-secondary mt-4" href="{% url 'analytics_export_csv' %}?from={{ from }}&to={{ to }}">CSV</a>
+</div>
+<div class="col-md-2 d-grid align-items-end">
+  <a class="btn btn-outline-secondary mt-4" href="{% url 'analytics_export_xlsx' %}?from={{ from }}&to={{ to }}">XLSX</a>
+</div>
+<div class="col-md-2 d-grid align-items-end">
+  <a class="btn btn-outline-secondary mt-4" href="{% url 'analytics_export_pdf' %}?from={{ from }}&to={{ to }}">PDF</a>
+</div>
+
+</form>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card card-body">
+      <div class="text-muted">Сумма за период</div>
+      <div class="fs-4">{{ total_sum }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-body">
+      <div class="text-muted">Среднее в день</div>
+      <div class="fs-4">{{ avg_day }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-body">
+      <div class="text-muted">Дней в выборке</div>
+      <div class="fs-4">{{ daily|length }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-body mb-4">
+  <canvas id="revChart" height="90"></canvas>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card card-body">
+      <h6 class="mb-3">Топ товаров по количеству</h6>
+      <table class="table table-sm">
+        <thead><tr><th>Товар</th><th class="text-end">Кол-во</th></tr></thead>
+        <tbody>
+        {% for r in top_qty %}
+          <tr><td>{{ r.id_tovar__nazvanie }}</td><td class="text-end">{{ r.qty }}</td></tr>
+        {% empty %}
+          <tr><td class="text-muted" colspan="2">Нет данных (заполните TovarVyruchka)</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card card-body">
+      <h6 class="mb-3">Топ товаров по сумме (qty × цена продажи)</h6>
+      <table class="table table-sm">
+        <thead><tr><th>Товар</th><th class="text-end">Сумма</th></tr></thead>
+        <tbody>
+        {% for r in top_amount %}
+          <tr><td>{{ r.id_tovar__nazvanie }}</td><td class="text-end">{{ r.amount }}</td></tr>
+        {% empty %}
+          <tr><td class="text-muted" colspan="2">Нет данных (нужны цена продажи и TovarVyruchka)</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const labels = {{ labels|safe }};
+  const values = {{ values|safe }};
+
+  const ctx = document.getElementById("revChart");
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [{ label: "Выручка по дням", data: values, tension: 0.25 }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+</script>
+{% endblock %}

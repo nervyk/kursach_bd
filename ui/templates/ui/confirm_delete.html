@@ -1,0 +1,12 @@
+{% extends "ui/base.html" %}
+{% block content %}
+<h4 class="mb-3">Удаление</h4>
+<form method="post" class="card card-body">
+  {% csrf_token %}
+  <p>Удалить запись: <strong>{{ object }}</strong>?</p>
+  <div class="d-flex gap-2">
+    <button class="btn btn-danger" type="submit">Удалить</button>
+    <a class="btn btn-secondary" href="javascript:history.back()">Отмена</a>
+  </div>
+</form>
+{% endblock %}

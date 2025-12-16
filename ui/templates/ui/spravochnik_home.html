@@ -1,0 +1,33 @@
+{% extends "ui/base.html" %}
+{% block title %}Справочники{% endblock %}
+{% block content %}
+<h4 class="mb-3">Справочники</h4>
+
+<div class="list-group" style="max-width: 520px;">
+  {% if perms.core.view_gruppatovarov %}
+    <a class="list-group-item list-group-item-action" href="{% url 'gruppa_list' %}">Группы товаров</a>
+  {% endif %}
+  {% if perms.core.view_edinitsaizmereniya %}
+    <a class="list-group-item list-group-item-action" href="{% url 'edinitsa_list' %}">Единицы измерения</a>
+  {% endif %}
+  {% if perms.core.view_bank %}
+    <a class="list-group-item list-group-item-action" href="{% url 'bank_list' %}">Банки</a>
+  {% endif %}
+  {% if perms.core.view_dolzhnost %}
+    <a class="list-group-item list-group-item-action" href="{% url 'dolzhnost_list' %}">Должности</a>
+  {% endif %}
+  {% if perms.core.view_otdel %}
+    <a class="list-group-item list-group-item-action" href="{% url 'otdel_list' %}">Отделы</a>
+  {% endif %}
+  {% if perms.core.view_strana %}
+  <a class="list-group-item list-group-item-action" href="{% url 'strana_list' %}">Страны</a>
+{% endif %}
+{% if perms.core.view_gorod %}
+  <a class="list-group-item list-group-item-action" href="{% url 'gorod_list' %}">Города</a>
+{% endif %}
+{% if perms.core.view_ulitsa %}
+  <a class="list-group-item list-group-item-action" href="{% url 'ulitsa_list' %}">Улицы</a>
+{% endif %}
+
+</div>
+{% endblock %}

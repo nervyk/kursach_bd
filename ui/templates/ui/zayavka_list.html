@@ -1,0 +1,122 @@
+{% extends "ui/base.html" %}
+{% block title %}Заявки{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h4 class="m-0">Заявки</h4>
+  {% if perms.core.add_zayavka %}
+    <a class="btn btn-success" href="{% url 'zayavka_add' %}">+ Добавить</a>
+  {% endif %}
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-6">
+    <input class="form-control" name="q" value="{{ q }}" placeholder="Поиск: магазин / статус">
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="sort">
+      <option value="id" {% if sort == "id" %}selected{% endif %}>ID</option>
+      <option value="data_zayavki" {% if sort == "data_zayavki" %}selected{% endif %}>Дата</option>
+      <option value="status" {% if sort == "status" %}selected{% endif %}>Статус</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select class="form-select" name="dir">
+      <option value="asc" {% if dir == "asc" %}selected{% endif %}>↑ Возрастание</option>
+      <option value="desc" {% if dir == "desc" %}selected{% endif %}>↓ Убывание</option>
+    </select>
+  </div>
+  <div class="col-md-1 d-grid">
+    <button class="btn btn-primary">OK</button>
+  </div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-striped table-hover align-middle">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Магазин</th>
+      <th>Дата</th>
+      <th>Статус</th>
+      <th>Комментарий</th>
+      <th class="text-end">Действия</th>
+    </tr>
+  </thead>
+
+  <tbody>
+  {% for obj in object_list %}
+    <tr>
+      <td>{{ obj.id }}</td>
+      <td>{{ obj.id_magazin }}</td>
+      <td>{{ obj.data_zayavki|default:"-" }}</td>
+      <td>{{ obj.get_status_display }}</td>
+      <td>{{ obj.comment|default:""|truncatechars:40 }}</td>
+
+      <td class="text-end">
+        <div class="btn-group btn-group-sm" role="group">
+
+          {# Редактирование #}
+          {% if perms.core.change_zayavka %}
+            <a class="btn btn-outline-secondary" href="{% url 'zayavka_edit' obj.id %}">Изм.</a>
+          {% endif %}
+
+          {# Отправка (только если черновик) #}
+          {% if perms.core.change_zayavka and obj.status == "DRAFT" %}
+            <form method="post" action="{% url 'zayavka_send' obj.id %}" class="d-inline">
+              {% csrf_token %}
+              <button class="btn btn-outline-success" type="submit">Отправить</button>
+            </form>
+          {% endif %}
+
+          {# Проведение (только если есть approve-права) #}
+          {% if perms.core.approve_zayavka %}
+            <form method="post" action="{% url 'zayavka_approve' obj.id %}" class="d-inline">
+              {% csrf_token %}
+              <button class="btn btn-outline-primary"
+                      type="submit"
+                      {% if obj.status != "SENT" %}disabled{% endif %}>
+                Провести
+              </button>
+            </form>
+          {% endif %}
+
+          {# Удаление #}
+          {% if perms.core.delete_zayavka %}
+            <a class="btn btn-outline-danger" href="{% url 'zayavka_delete' obj.id %}">Удал.</a>
+          {% endif %}
+
+        </div>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-muted">Нет данных</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if is_paginated %}
+<nav>
+  <ul class="pagination">
+    {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?q={{ q }}&sort={{ sort }}&dir={{ dir }}&page={{ page_obj.previous_page_number }}">Назад</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Назад</span></li>
+    {% endif %}
+
+    <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+
+    {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?q={{ q }}&sort={{ sort }}&dir={{ dir }}&page={{ page_obj.next_page_number }}">Вперёд</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Вперёд</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

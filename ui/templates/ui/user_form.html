@@ -1,0 +1,10 @@
+{% extends "ui/base.html" %}
+{% block title %}Пользователь{% endblock %}
+{% block content %}
+<h4 class="mb-3">Пользователь</h4>
+<form method="post" class="card card-body">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-primary" type="submit">Сохранить</button>
+</form>
+{% endblock %}

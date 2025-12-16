@@ -1,0 +1,35 @@
+{% extends "ui/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h3 class="mb-3">{{ title }}</h3>
+
+<form method="post" class="card card-body">
+  {% csrf_token %}
+  {{ form.as_p }}
+
+  <hr class="my-3">
+  <h5>Позиции заявки</h5>
+  {{ formset.management_form }}
+
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Товар</th>
+        <th style="width:160px;">Кол-во</th>
+        <th style="width:120px;">Удалить</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in formset %}
+      <tr>
+        <td>{{ f.id_tovar }}</td>
+        <td>{{ f.kolichestvo }}</td>
+        <td>{% if f.instance.pk %}{{ f.DELETE }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <button class="btn btn-primary" type="submit">Сохранить</button>
+</form>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "ui/base.html" %}
+{% block title %}SQL-консоль{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">SQL-консоль (только SELECT)</h4>
+
+<form method="post" class="card card-body mb-3">
+  {% csrf_token %}
+
+  <label class="form-label">SQL-запрос</label>
+
+  <!-- КНОПКИ ШАБЛОНОВ -->
+  <div class="btn-group mb-2" role="group" aria-label="SQL templates">
+    <button type="button" class="btn btn-outline-secondary" onclick="fillTpl('tpl1')">
+      Шаблон 1
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="fillTpl('tpl2')">
+      Шаблон 2
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="fillTpl('tpl3')">
+      Шаблон 3
+    </button>
+  </div>
+
+<textarea id="sqlText" name="sql" rows="10" class="form-control"
+          placeholder="Введите SQL-запрос...">{{ sql }}</textarea>
+
+
+  <div class="text-muted small mt-2">
+    Ограничение: вывод максимум 200 строк. Запрещены DDL/DML (INSERT/UPDATE/DELETE/DROP...).
+  </div>
+
+  <div class="mt-3">
+    <button class="btn btn-primary" type="submit">Выполнить</button>
+  </div>
+</form>
+
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if columns %}
+<div class="table-responsive">
+  <table class="table table-striped table-hover align-middle">
+    <thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>{% for v in r %}<td>{{ v }}</td>{% endfor %}</tr>
+      {% empty %}
+        <tr><td colspan="{{ columns|length }}" class="text-muted">Нет строк</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+  const TPL = {
+    tpl1: `SELECT *
+FROM Products
+ORDER BY Price DESC
+LIMIT 3 OFFSET 1;`,
+
+    tpl2: `SELECT CategoryId, COUNT(*) AS cnt, AVG(Price) AS avg_price
+FROM Products
+GROUP BY CategoryId
+ORDER BY cnt DESC;`,
+
+    tpl3: `WITH numbers AS (
+  SELECT 1 AS num
+  UNION ALL
+  SELECT num + 1 FROM numbers WHERE num < 10
+)
+SELECT * FROM numbers;`
+  };
+
+  function fillTpl(key) {
+    const ta = document.getElementById('sqlText');
+    if (!ta) return;
+    ta.value = TPL[key] || '';
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+</script>
+{% endblock %}
