@@ -1,0 +1,22 @@
+{% extends "ui/base.html" %}
+{% block title %}403 — Доступ запрещён{% endblock %}
+
+{% block content %}
+<div class="text-center py-5">
+  <div class="display-1 fw-bold" style="letter-spacing: .08em;">403</div>
+  <div class="fs-4 fw-semibold mt-2">Доступ запрещён</div>
+  <p class="text-muted mt-2 mb-4" style="max-width: 56ch; margin: 0 auto;">
+    У вас нет прав на просмотр этой страницы или выполнение операции.
+    Если считаете, что это ошибка — обратитесь к администратору.
+  </p>
+
+  <div class="d-flex gap-2 justify-content-center flex-wrap">
+    {% if request.user.is_authenticated %}
+      <a class="btn btn-primary" href="{% url 'home' %}">На главную</a>
+    {% else %}
+      <a class="btn btn-primary" href="{% url 'login' %}">Войти</a>
+    {% endif %}
+    <button class="btn btn-outline-light" type="button" onclick="history.back()">Назад</button>
+  </div>
+</div>
+{% endblock %}

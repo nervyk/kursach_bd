@@ -1,10 +1,51 @@
 {% extends "ui/base.html" %}
 {% block title %}Пользователь{% endblock %}
+
 {% block content %}
-<h4 class="mb-3">Пользователь</h4>
-<form method="post" class="card card-body">
+<style>
+  .soft-card { border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+  .soft-card .card-header { background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.08); }
+  .btn-icon { display: inline-flex; align-items: center; gap: .4rem; }
+
+  /* form.as_p аккуратнее */
+  form.card p { margin-bottom: .9rem; }
+  form.card label { font-weight: 600; margin-bottom: .35rem; }
+  form.card input, form.card select, form.card textarea { border-radius: 12px; }
+  form.card .helptext { display:block; margin-top:.25rem; opacity:.75; font-size:.875rem; }
+  form.card ul.errorlist { list-style:none; padding-left:0; margin:.35rem 0 0; }
+  form.card ul.errorlist li { color:#ffb4b4; font-size:.9rem; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="m-0">Пользователь</h4>
+    <div class="text-muted">Создание/редактирование учётной записи</div>
+  </div>
+  <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle">
+    Админ
+  </span>
+</div>
+
+<form method="post" class="card soft-card shadow-sm">
   {% csrf_token %}
-  {{ form.as_p }}
-  <button class="btn btn-primary" type="submit">Сохранить</button>
+
+  <div class="card-header py-3">
+    <div class="fw-semibold">Данные пользователя</div>
+  </div>
+
+  <div class="card-body">
+    {{ form.as_p }}
+  </div>
+
+  <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary btn-icon" type="submit">
+        <span aria-hidden="true">💾</span><span>Сохранить</span>
+      </button>
+      <a class="btn btn-outline-secondary btn-icon" href="javascript:history.back()">
+        <span aria-hidden="true">↩️</span><span>Назад</span>
+      </a>
+    </div>
+  </div>
 </form>
 {% endblock %}

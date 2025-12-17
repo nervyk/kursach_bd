@@ -2,108 +2,346 @@
 {% block title %}Аналитика{% endblock %}
 
 {% block content %}
-<h4 class="mb-3">Аналитика</h4>
+<style>
+  .soft-card { border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+  .soft-card .card-header { background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.08); }
+  .badge-soft { background: rgba(13,110,253,.12); color: #9ec5fe; border: 1px solid rgba(13,110,253,.25); }
+  .badge-soft-muted { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+  .btn-icon { display: inline-flex; align-items: center; gap: .4rem; }
+  .form-hint { font-size: .875rem; opacity: .75; }
+  .nav-tabs .nav-link { border-top-left-radius: 14px; border-top-right-radius: 14px; }
+  .table thead th { font-weight: 600; }
+  .table tbody tr:hover { transform: translateY(-1px); transition: .12s ease; }
+  .kpi { padding: 1rem; border-radius: 16px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); }
+  .kpi .label { font-size: .85rem; opacity: .75; }
+  .kpi .value { font-size: 1.35rem; font-weight: 700; letter-spacing: .2px; }
+  .empty-state { padding: 2.25rem 1rem; text-align: center; }
+  .empty-state .icon { font-size: 2rem; opacity: .7; }
+</style>
 
-<form class="row g-2 mb-3" method="get">
-  <div class="col-md-3">
-    <label class="form-label">С</label>
-    <input class="form-control" type="date" name="from" value="{{ from }}">
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="m-0">Аналитика</h4>
+    <div class="form-hint">Период, магазин и сводки по выручке</div>
   </div>
-  <div class="col-md-3">
-    <label class="form-label">По</label>
-    <input class="form-control" type="date" name="to" value="{{ to }}">
-  </div>
-  <div class="col-md-2 d-grid align-items-end">
-    <button class="btn btn-primary mt-4">Показать</button>
-  </div>
-  <div class="col-md-4 d-grid align-items-end">
-  <a class="btn btn-outline-secondary mt-4" href="{% url 'analytics_export_csv' %}?from={{ from }}&to={{ to }}">CSV</a>
-</div>
-<div class="col-md-2 d-grid align-items-end">
-  <a class="btn btn-outline-secondary mt-4" href="{% url 'analytics_export_xlsx' %}?from={{ from }}&to={{ to }}">XLSX</a>
-</div>
-<div class="col-md-2 d-grid align-items-end">
-  <a class="btn btn-outline-secondary mt-4" href="{% url 'analytics_export_pdf' %}?from={{ from }}&to={{ to }}">PDF</a>
-</div>
 
-</form>
-
-<div class="row g-3 mb-3">
-  <div class="col-md-4">
-    <div class="card card-body">
-      <div class="text-muted">Сумма за период</div>
-      <div class="fs-4">{{ total_sum }}</div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card card-body">
-      <div class="text-muted">Среднее в день</div>
-      <div class="fs-4">{{ avg_day }}</div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card card-body">
-      <div class="text-muted">Дней в выборке</div>
-      <div class="fs-4">{{ daily|length }}</div>
-    </div>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="badge rounded-pill badge-soft-muted">
+      {{ from }} — {{ to }}
+    </span>
+    {% if magazins %}
+      <span class="badge rounded-pill badge-soft">
+        {% if selected_magazin == 0 %}Все магазины{% else %}Магазин #{{ selected_magazin }}{% endif %}
+      </span>
+    {% endif %}
   </div>
 </div>
 
-<div class="card card-body mb-4">
-  <canvas id="revChart" height="90"></canvas>
-</div>
-
-<div class="row g-3">
-  <div class="col-md-6">
-    <div class="card card-body">
-      <h6 class="mb-3">Топ товаров по количеству</h6>
-      <table class="table table-sm">
-        <thead><tr><th>Товар</th><th class="text-end">Кол-во</th></tr></thead>
-        <tbody>
-        {% for r in top_qty %}
-          <tr><td>{{ r.id_tovar__nazvanie }}</td><td class="text-end">{{ r.qty }}</td></tr>
-        {% empty %}
-          <tr><td class="text-muted" colspan="2">Нет данных (заполните TovarVyruchka)</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
+<div class="card soft-card shadow-sm mb-3">
+  <div class="card-header py-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge rounded-pill badge-soft">Фильтры</span>
+        <span class="badge rounded-pill badge-soft-muted">tab: {{ tab }}</span>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm btn-icon" href="{% url 'analytics' %}">
+        <span aria-hidden="true">↩️</span><span>Сбросить</span>
+      </a>
     </div>
   </div>
 
-  <div class="col-md-6">
-    <div class="card card-body">
-      <h6 class="mb-3">Топ товаров по сумме (qty × цена продажи)</h6>
-      <table class="table table-sm">
-        <thead><tr><th>Товар</th><th class="text-end">Сумма</th></tr></thead>
-        <tbody>
-        {% for r in top_amount %}
-          <tr><td>{{ r.id_tovar__nazvanie }}</td><td class="text-end">{{ r.amount }}</td></tr>
-        {% empty %}
-          <tr><td class="text-muted" colspan="2">Нет данных (нужны цена продажи и TovarVyruchka)</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
+  <div class="card-body">
+    <form class="row g-2" method="get">
+      <input type="hidden" name="tab" value="{{ tab }}">
+
+      <div class="col-md-3">
+        <label class="form-label">С</label>
+        <input class="form-control" type="date" name="from" value="{{ from }}">
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">По</label>
+        <input class="form-control" type="date" name="to" value="{{ to }}">
+      </div>
+
+      {% if magazins %}
+      <div class="col-md-4">
+        <label class="form-label">Магазин</label>
+        <select class="form-select" name="magazin">
+          <option value="0" {% if selected_magazin == 0 %}selected{% endif %}>Все магазины</option>
+          {% for m in magazins %}
+            <option value="{{ m.id }}" {% if selected_magazin == m.id %}selected{% endif %}>{{ m.nazvanie }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="col-md-2 d-grid align-items-end">
+        <button class="btn btn-primary btn-icon mt-4">
+          <span aria-hidden="true">📊</span><span>Показать</span>
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const labels = {{ labels|safe }};
-  const values = {{ values|safe }};
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <ul class="nav nav-tabs">
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'daily' %}active{% endif %}"
+         href="?tab=daily&from={{ from }}&to={{ to }}{% if magazins %}&magazin={{ selected_magazin }}{% endif %}">
+        Динамика
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'stores' %}active{% endif %}"
+         href="?tab=stores&from={{ from }}&to={{ to }}{% if magazins %}&magazin={{ selected_magazin }}{% endif %}">
+        По магазинам
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link {% if tab == 'sellers' %}active{% endif %}"
+         href="?tab=sellers&from={{ from }}&to={{ to }}{% if magazins %}&magazin={{ selected_magazin }}{% endif %}">
+        По продавцам
+      </a>
+    </li>
+  </ul>
 
-  const ctx = document.getElementById("revChart");
-  new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: labels,
-      datasets: [{ label: "Выручка по дням", data: values, tension: 0.25 }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: true } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
-</script>
+  <a class="btn btn-outline-secondary btn-sm btn-icon"
+     href="{% url 'analytics_export_csv' %}?mode={{ tab }}&from={{ from }}&to={{ to }}{% if magazins %}&magazin={{ selected_magazin }}{% endif %}">
+    <span aria-hidden="true">⬇️</span><span>CSV</span>
+  </a>
+</div>
+
+{% if tab == "daily" %}
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <div class="kpi">
+        <div class="label">Сумма за период</div>
+        <div class="value">{{ total_sum }}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="kpi">
+        <div class="label">Среднее в день</div>
+        <div class="value">{{ avg_day }}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="kpi">
+        <div class="label">Дней в выборке</div>
+        <div class="value">{{ daily|length }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card soft-card shadow-sm mb-4">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge rounded-pill badge-soft">График</span>
+        <span class="text-muted">Выручка по дням</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <canvas id="revChart" height="90"></canvas>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="card soft-card shadow-sm">
+        <div class="card-header py-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge rounded-pill badge-soft">Топ</span>
+            <span class="text-muted">по количеству</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Товар</th><th class="text-end">Кол-во</th></tr></thead>
+            <tbody>
+            {% for r in top_qty %}
+              <tr>
+                <td class="fw-semibold">{{ r.id_tovar__nazvanie }}</td>
+                <td class="text-end fw-semibold">{{ r.qty }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="2">
+                  <div class="empty-state">
+                    <div class="icon" aria-hidden="true">🧾</div>
+                    <div class="fw-semibold mt-2">Нет данных</div>
+                    <div class="text-muted">Попробуй расширить период</div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card soft-card shadow-sm">
+        <div class="card-header py-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge rounded-pill badge-soft">Топ</span>
+            <span class="text-muted">по сумме</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <table class="table table-sm align-middle">
+            <thead><tr><th>Товар</th><th class="text-end">Сумма</th></tr></thead>
+            <tbody>
+            {% for r in top_amount %}
+              <tr>
+                <td class="fw-semibold">{{ r.id_tovar__nazvanie }}</td>
+                <td class="text-end fw-semibold">{{ r.amount }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="2">
+                  <div class="empty-state">
+                    <div class="icon" aria-hidden="true">🧾</div>
+                    <div class="fw-semibold mt-2">Нет данных</div>
+                    <div class="text-muted">Попробуй расширить период</div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const labels = {{ labels|safe }};
+    const values = {{ values|safe }};
+    const ctx = document.getElementById("revChart");
+
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [{
+          label: "Выручка по дням",
+          data: values,
+          tension: 0.25,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: true }
+        },
+        scales: {
+          y: { beginAtZero: true },
+          x: { ticks: { maxRotation: 0 } }
+        }
+      }
+    });
+  </script>
+
+{% elif tab == "stores" %}
+  <div class="card soft-card shadow-sm">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge rounded-pill badge-soft">Сводка</span>
+        <span class="text-muted">выручка по магазинам</span>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Магазин</th>
+              <th class="text-end">Чеков</th>
+              <th class="text-end">Кол-во</th>
+              <th class="text-end pe-3">Сумма</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in by_store %}
+            <tr>
+              <td class="ps-3 fw-semibold">{{ r.id_vyruchka__id_magazin__nazvanie }}</td>
+              <td class="text-end">{{ r.checks }}</td>
+              <td class="text-end">{{ r.qty }}</td>
+              <td class="text-end pe-3 fw-semibold">{{ r.amount }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4">
+                <div class="empty-state">
+                  <div class="icon" aria-hidden="true">🏬</div>
+                  <div class="fw-semibold mt-2">Нет данных</div>
+                  <div class="text-muted">Измени период или магазин</div>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+{% else %}
+  <div class="card soft-card shadow-sm">
+    <div class="card-header py-3 d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge rounded-pill badge-soft">Сводка</span>
+        <span class="text-muted">выручка по продавцам</span>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Магазин</th>
+              <th>Продавец</th>
+              <th class="text-end">Чеков</th>
+              <th class="text-end">Кол-во</th>
+              <th class="text-end pe-3">Сумма</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for r in by_seller %}
+            <tr>
+              <td class="ps-3 fw-semibold">{{ r.id_vyruchka__id_magazin__nazvanie }}</td>
+              <td>
+                <div class="fw-semibold">
+                  {{ r.id_vyruchka__id_rabotnik__familiya }}
+                  {{ r.id_vyruchka__id_rabotnik__imya }}
+                  {{ r.id_vyruchka__id_rabotnik__otchestvo }}
+                </div>
+              </td>
+              <td class="text-end">{{ r.checks }}</td>
+              <td class="text-end">{{ r.qty }}</td>
+              <td class="text-end pe-3 fw-semibold">{{ r.amount }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5">
+                <div class="empty-state">
+                  <div class="icon" aria-hidden="true">🧑‍💼</div>
+                  <div class="fw-semibold mt-2">Нет данных</div>
+                  <div class="text-muted">Измени период или магазин</div>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endif %}
 {% endblock %}

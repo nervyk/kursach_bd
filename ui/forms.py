@@ -2,7 +2,9 @@ from django import forms
 from core.models import (
     Tovar, Postavka, Vyruchka,
     Magazin, Postavshchik, Rabotnik,
-    GruppaTovarov, EdinitsaIzmereniya, Bank, Otdel, Dolzhnost
+    GruppaTovarov, EdinitsaIzmereniya, Bank, Otdel, Dolzhnost,
+    Professiya, Specialnost, Klassifikaciya, StruktPodrazdelenie,
+    MestoRaboty, ZapisiTrudKnizhke,
 )
 from core.models import TovarVyruchka
 from core.models import Zayavka, ZayavkaItem
@@ -217,8 +219,11 @@ class TovarVyruchkaForm(forms.ModelForm):
 class MagazinForm(forms.ModelForm):
     class Meta:
         model = Magazin
-        fields = ["nazvanie", "familiya_direktora", "imya_direktora", "otchestvo_direktora",
-                  "id_strana", "id_gorod", "id_ulica"]
+        fields = [
+            "nazvanie", "familiya_direktora", "imya_direktora", "otchestvo_direktora",
+            "id_strana", "id_gorod", "id_ulica",
+            "nomer_doma",
+        ]
 
 class PostavshchikForm(forms.ModelForm):
     class Meta:
@@ -267,3 +272,68 @@ class DolzhnostForm(forms.ModelForm):
         model = Dolzhnost
         fields = ["nazvanie"]
 
+# ===== Кадровые справочники =====
+
+class ProfessiyaForm(forms.ModelForm):
+    class Meta:
+        model = Professiya
+        fields = ["nazvanie"]
+
+class SpecialnostForm(forms.ModelForm):
+    class Meta:
+        model = Specialnost
+        fields = ["nazvanie"]
+
+class KlassifikaciyaForm(forms.ModelForm):
+    class Meta:
+        model = Klassifikaciya
+        fields = ["nazvanie"]
+
+class StruktPodrazdelenieForm(forms.ModelForm):
+    class Meta:
+        model = StruktPodrazdelenie
+        fields = ["nazvanie"]
+
+
+# ===== Кадровые документы =====
+
+class MestoRabotyForm(forms.ModelForm):
+    class Meta:
+        model = MestoRaboty
+        fields = ["nazvanie", "id_strana", "id_gorod", "id_ulica", "nomer_doma"]
+
+class ZapisiTrudKnizhkeForm(forms.ModelForm):
+    """Запись трудовой книжки. Не-владельцу сети показываем работников только его магазина."""
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        mid = _user_magazin_id(user)
+        if mid:
+            self.fields["id_rabotnika"].queryset = Rabotnik.objects.filter(
+                id_otdela__id_magazin_id=mid
+            )
+
+    class Meta:
+        model = ZapisiTrudKnizhke
+        fields = [
+            "id_rabotnika",
+            "id_mesto_raboty",
+            "id_strukturnoe_podrazdelenie",
+            "id_professii",
+            "id_specialnosti",
+            "id_klassifikacii",
+            "id_dolzhnosti",
+            "data_priema_na_rabotu",
+            "data_uvolenija",
+            "vid_meropriyatiya",
+            "data",
+            "prichina_prekrashcheniya_tr",
+            "nomer",
+            "vid_dokumenta",
+        ]
+        widgets = {
+            "data_priema_na_rabotu": forms.DateInput(attrs={"type": "date"}),
+            "data_uvolenija": forms.DateInput(attrs={"type": "date"}),
+            "data": forms.DateInput(attrs={"type": "date"}),
+        }

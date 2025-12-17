@@ -1,6 +1,116 @@
 {% extends "ui/base.html" %}
 {% block title %}Главная{% endblock %}
+
 {% block content %}
-<h4>Главная</h4>
-<p class="text-muted">Выберите раздел в меню.</p>
+<style>
+  .hero {
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 18px;
+    background: rgba(255,255,255,.03);
+    box-shadow: 0 10px 30px rgba(0,0,0,.20);
+    overflow: hidden;
+  }
+  .hero-top {
+    padding: 1.25rem 1.25rem 0;
+    background: radial-gradient(900px 500px at 10% 0%, rgba(13,110,253,.18), transparent 55%),
+                radial-gradient(900px 500px at 90% 0%, rgba(25,135,84,.14), transparent 55%);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .hero-body { padding: 1.25rem; }
+  .chip {
+    display:inline-flex; align-items:center; gap:.5rem;
+    padding:.45rem .75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.04);
+    text-decoration: none;
+    color: rgba(255,255,255,.92);
+  }
+  .chip:hover { background: rgba(255,255,255,.08); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .75rem; }
+  .card-link {
+    display:block;
+    padding: 1rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.03);
+    text-decoration:none;
+    color: rgba(255,255,255,.92);
+    transition: transform .12s ease, background .12s ease;
+  }
+  .card-link:hover { transform: translateY(-2px); background: rgba(255,255,255,.05); }
+  .card-link .title { font-weight: 700; }
+  .card-link .desc { opacity: .75; font-size: .9rem; margin-top: .25rem; }
+</style>
+
+<div class="hero">
+  <div class="hero-top">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div>
+        <h4 class="m-0">Главная</h4>
+        <p class="text-muted mb-0">Выберите раздел в меню или откройте нужный блок ниже.</p>
+      </div>
+      <span class="chip" aria-hidden="true">🧩 ИС магазина</span>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mt-3 pb-3">
+      {% if perms.core.view_tovar %}<a class="chip" href="{% url 'tovar_list' %}">📦 Товары</a>{% endif %}
+      {% if perms.core.view_postavka %}<a class="chip" href="{% url 'postavka_list' %}">🚚 Поставки</a>{% endif %}
+      {% if perms.core.view_vyruchka %}<a class="chip" href="{% url 'vyruchka_list' %}">💰 Выручка</a>{% endif %}
+      {% if perms.core.view_zayavka %}<a class="chip" href="{% url 'zayavka_list' %}">📝 Заявки</a>{% endif %}
+      {% if perms.core.view_magazin %}<a class="chip" href="{% url 'magazin_list' %}">🏬 Магазины</a>{% endif %}
+      {% if perms.core.view_postavshchik %}<a class="chip" href="{% url 'postavshchik_list' %}">🏷️ Поставщики</a>{% endif %}
+      {% if perms.core.view_rabotnik %}<a class="chip" href="{% url 'rabotnik_list' %}">👥 Работники</a>{% endif %}
+      {% if perms.core.view_magazintovar %}<a class="chip" href="{% url 'magazintovar_list' %}">📦 Склад</a>{% endif %}
+      {% if perms.core.view_vyruchka %}<a class="chip" href="{% url 'analytics' %}">📊 Аналитика</a>{% endif %}
+      {% if perms.core.sql_console %}<a class="chip" href="{% url 'sql_console' %}">🧠 SQL</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="hero-body">
+    <div class="grid">
+      {% if perms.core.view_tovar %}
+        <a class="card-link" href="{% url 'tovar_list' %}">
+          <div class="title">📦 Товары</div>
+          <div class="desc">Справочник товаров, поиск и управление.</div>
+        </a>
+      {% endif %}
+
+      {% if perms.core.view_postavka %}
+        <a class="card-link" href="{% url 'postavka_list' %}">
+          <div class="title">🚚 Поставки</div>
+          <div class="desc">Поступления от поставщиков, сортировка и фильтры.</div>
+        </a>
+      {% endif %}
+
+      {% if perms.core.view_vyruchka %}
+        <a class="card-link" href="{% url 'vyruchka_list' %}">
+          <div class="title">💰 Выручка</div>
+          <div class="desc">Чеки, суммы и детализация по продажам.</div>
+        </a>
+      {% endif %}
+
+      {% if perms.core.view_zayavka %}
+        <a class="card-link" href="{% url 'zayavka_list' %}">
+          <div class="title">📝 Заявки</div>
+          <div class="desc">Заявки на поставку/закупку и их статусы.</div>
+        </a>
+      {% endif %}
+
+      {% if perms.core.view_magazin %}
+        <a class="card-link" href="{% url 'magazin_list' %}">
+          <div class="title">🏬 Магазины</div>
+          <div class="desc">Список магазинов и основные реквизиты.</div>
+        </a>
+      {% endif %}
+
+      {% if perms.core.view_postavshchik %}
+        <a class="card-link" href="{% url 'postavshchik_list' %}">
+          <div class="title">🏷️ Поставщики</div>
+          <div class="desc">Контрагенты и условия поставок.</div>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}

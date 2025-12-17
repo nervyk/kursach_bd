@@ -1,33 +1,176 @@
 {% extends "ui/base.html" %}
 {% block title %}Справочники{% endblock %}
+
 {% block content %}
-<h4 class="mb-3">Справочники</h4>
+<style>
+  /* важно: убираем opacity у текста -> используем color с альфой */
+  .hint { font-size: .875rem; color: rgba(255,255,255,.70); }
 
-<div class="list-group" style="max-width: 520px;">
-  {% if perms.core.view_gruppatovarov %}
-    <a class="list-group-item list-group-item-action" href="{% url 'gruppa_list' %}">Группы товаров</a>
-  {% endif %}
-  {% if perms.core.view_edinitsaizmereniya %}
-    <a class="list-group-item list-group-item-action" href="{% url 'edinitsa_list' %}">Единицы измерения</a>
-  {% endif %}
-  {% if perms.core.view_bank %}
-    <a class="list-group-item list-group-item-action" href="{% url 'bank_list' %}">Банки</a>
-  {% endif %}
-  {% if perms.core.view_dolzhnost %}
-    <a class="list-group-item list-group-item-action" href="{% url 'dolzhnost_list' %}">Должности</a>
-  {% endif %}
-  {% if perms.core.view_otdel %}
-    <a class="list-group-item list-group-item-action" href="{% url 'otdel_list' %}">Отделы</a>
-  {% endif %}
-  {% if perms.core.view_strana %}
-  <a class="list-group-item list-group-item-action" href="{% url 'strana_list' %}">Страны</a>
-{% endif %}
-{% if perms.core.view_gorod %}
-  <a class="list-group-item list-group-item-action" href="{% url 'gorod_list' %}">Города</a>
-{% endif %}
-{% if perms.core.view_ulitsa %}
-  <a class="list-group-item list-group-item-action" href="{% url 'ulitsa_list' %}">Улицы</a>
-{% endif %}
+  .soft-card{
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 16px;
+    background: rgba(17,25,40,.55);        /* <— было белое */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: rgba(255,255,255,.92);
+  }
+  .soft-card .card-header{
+    background: rgba(255,255,255,.03);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
 
+  .chip{
+    display:inline-flex; align-items:center; gap:.5rem;
+    padding:.45rem .75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.04);
+    color: rgba(255,255,255,.92);
+    text-decoration:none;
+  }
+  .chip:hover{ background: rgba(255,255,255,.08); }
+
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem; }
+
+  .tile{
+    display:block;
+    padding: 1rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.04);
+    text-decoration:none;
+    transition: transform .12s ease, background .12s ease, border-color .12s ease;
+  }
+  .tile:hover{ transform: translateY(-2px); background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); }
+
+  .tile .title{ font-weight:700; color: rgba(255,255,255,.95); }
+  .tile .desc{ margin-top:.25rem; font-size:.9rem; color: rgba(255,255,255,.70); }
+
+  .section{
+    margin: 1rem 0 .5rem;
+    padding:.45rem .75rem;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.03);
+    display:inline-flex; gap:.5rem; align-items:center;
+    color: rgba(255,255,255,.92);
+  }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="m-0 text-white">Справочники</h4>
+    <div class="hint">Быстрый доступ к справочным таблицам и кадровому учёту</div>
+  </div>
+  <span class="chip" aria-hidden="true">📚 Навигация</span>
+</div>
+
+<div class="card soft-card shadow-sm">
+  <div class="card-header py-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="chip">🏷️ Общие</span>
+      {% if perms.core.view_professiya or perms.core.view_specialnost or perms.core.view_klassifikaciya or perms.core.view_struktpodrazdelenie or perms.core.view_mestoraboty or perms.core.view_zapisitrudknizhke %}
+        <span class="chip">👔 Кадровый учет</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    <div class="grid">
+      {% if perms.core.view_gruppatovarov %}
+        <a class="tile" href="{% url 'gruppa_list' %}">
+          <div class="title">🧺 Группы товаров</div>
+          <div class="desc">Категоризация ассортимента.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_edinitsaizmereniya %}
+        <a class="tile" href="{% url 'edinitsa_list' %}">
+          <div class="title">📏 Единицы измерения</div>
+          <div class="desc">Шт, кг, л и другие единицы.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_bank %}
+        <a class="tile" href="{% url 'bank_list' %}">
+          <div class="title">🏦 Банки</div>
+          <div class="desc">Справочник банков.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_dolzhnost %}
+        <a class="tile" href="{% url 'dolzhnost_list' %}">
+          <div class="title">🪪 Должности</div>
+          <div class="desc">Роли и должности сотрудников.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_otdel %}
+        <a class="tile" href="{% url 'otdel_list' %}">
+          <div class="title">🏢 Отделы</div>
+          <div class="desc">Структура организации.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_strana %}
+        <a class="tile" href="{% url 'strana_list' %}">
+          <div class="title">🌍 Страны</div>
+          <div class="desc">География и адреса.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_gorod %}
+        <a class="tile" href="{% url 'gorod_list' %}">
+          <div class="title">🏙️ Города</div>
+          <div class="desc">Справочник городов.</div>
+        </a>
+      {% endif %}
+      {% if perms.core.view_ulitsa %}
+        <a class="tile" href="{% url 'ulitsa_list' %}">
+          <div class="title">🛣️ Улицы</div>
+          <div class="desc">Справочник улиц.</div>
+        </a>
+      {% endif %}
+    </div>
+
+    {% if perms.core.view_professiya or perms.core.view_specialnost or perms.core.view_klassifikaciya or perms.core.view_struktpodrazdelenie or perms.core.view_mestoraboty or perms.core.view_zapisitrudknizhke %}
+      <div class="mt-4">
+        <span class="section">👔 Кадровый учет</span>
+
+        <div class="grid mt-2">
+          {% if perms.core.view_professiya %}
+            <a class="tile" href="{% url 'professiya_list' %}">
+              <div class="title">🧑‍🏭 Профессии (ОКПДТР)</div>
+              <div class="desc">Классификатор профессий.</div>
+            </a>
+          {% endif %}
+          {% if perms.core.view_specialnost %}
+            <a class="tile" href="{% url 'specialnost_list' %}">
+              <div class="title">🎓 Специальности</div>
+              <div class="desc">Направления и специальности.</div>
+            </a>
+          {% endif %}
+          {% if perms.core.view_klassifikaciya %}
+            <a class="tile" href="{% url 'klassifikaciya_list' %}">
+              <div class="title">🏅 Квалификации</div>
+              <div class="desc">Разряды и уровни.</div>
+            </a>
+          {% endif %}
+          {% if perms.core.view_struktpodrazdelenie %}
+            <a class="tile" href="{% url 'strukt_list' %}">
+              <div class="title">🧩 Структурные подразделения</div>
+              <div class="desc">Подразделения и связи.</div>
+            </a>
+          {% endif %}
+          {% if perms.core.view_mestoraboty %}
+            <a class="tile" href="{% url 'mestoraboty_list' %}">
+              <div class="title">📍 Места работы</div>
+              <div class="desc">Локации/точки работы.</div>
+            </a>
+          {% endif %}
+          {% if perms.core.view_zapisitrudknizhke %}
+            <a class="tile" href="{% url 'trud_list' %}">
+              <div class="title">📘 Трудовая книжка (события)</div>
+              <div class="desc">События и записи трудовой.</div>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

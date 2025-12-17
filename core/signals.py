@@ -12,10 +12,7 @@ from django.contrib.auth import get_user_model
 from .models import UserProfile
 
 def _qty_to_int(qty) -> int:
-    """
-    Приводим количество из Decimal/None к int безопасно.
-    Если у тебя количество всегда целое — проблем не будет.
-    """
+    
     if qty is None:
         return 0
     if isinstance(qty, Decimal):
@@ -40,14 +37,12 @@ def postavka_post_save(sender, instance: Postavka, created, **kwargs):
     old_qty = getattr(instance, "_old_qty_int", 0)
     old_tovar_id = getattr(instance, "_old_tovar_id", None)
 
-    # Если изменили товар у уже существующей поставки — откатываем старому товару старое количество
     if old_tovar_id and old_tovar_id != instance.id_tovar_id and old_qty:
         Tovar.objects.filter(pk=old_tovar_id).update(
             kolichestvo_na_sklade=Coalesce(F("kolichestvo_na_sklade"), 0) - old_qty
         )
         old_qty = 0
 
-    # Докидываем разницу новому товару
     delta = new_qty - old_qty
     if delta:
         Tovar.objects.filter(pk=instance.id_tovar_id).update(
@@ -64,23 +59,84 @@ def postavka_pre_delete(sender, instance: Postavka, **kwargs):
         )
 
 ROLE_GROUPS = {
+    # Владелец сети — полный доступ ко всем моделям core + доступ к SQL-консоли
+    # + возможность проводить (одобрять) заявки.
     "Владелец сети": {"all_core": True, "extra": ["sql_console", "approve_zayavka"]},
 
-    "Директор магазина": {"models": ["magazin", "otdel", "rabotnik", "vyruchka", "zayavka", "magazintovar"],
-                          "actions": ["view"], "extra": []},
+    # Директор магазина - в рамках курсового обычно нужен полный VIEW-доступ
+    # ко всем сущностям предметной области (кроме пользователей), чтобы
+    # формировать отчёты и контролировать показатели.
+    "Директор магазина": {
+        "models": [
+            # операции
+            "zayavka", "zayavkaitem", "vyruchka", "tovarvyruchka",
+            "postavka", "postavshchik",
+            # магазины/склады
+            "magazin", "otdel", "magazintovar", "tovar",
+            # кадровый контур
+            "rabotnik", "zapisitrudknizhke", "mestoraboty",
+            # справочники
+            "gruppatovarov", "edinitsaizmereniya", "bank",
+            "strana", "gorod", "ulitsa",
+            "dolzhnost", "professiya", "specialnost", "klassifikaciya", "struktpodrazdelenie",
+        ],
+        "actions": ["view"],
+        "extra": [],
+    },
 
-    "Руководитель отдела": {"models": ["vyruchka", "rabotnik", "magazintovar"],
-                            "actions": ["view"], "extra": []},
+    # Руководитель отдела — VIEW-доступ (ограничение по отделу делается в UI queryset'ах)
+    "Руководитель отдела": {
+        "models": [
+            "vyruchka", "tovarvyruchka",
+            "rabotnik",
+            "magazintovar", "tovar",
+            "otdel",
+            "gruppatovarov", "edinitsaizmereniya",
+        ],
+        "actions": ["view"],
+        "extra": [],
+    },
 
-    "Заведующий складом магазина": {"models": ["zayavka", "magazintovar", "tovar"],
-                                    "actions": ["view", "add", "change"], "extra": []},
+    # Заведующий складом магазина — формирование заявок и ведение остатков магазина.
+    "Заведующий складом магазина": {
+        "models": [
+            "zayavka", "zayavkaitem",
+            "magazintovar",
+            # товары/справочники ему не даём прав на редактирование через групповые perms;
+            # выбор товара для заявки работает и без отдельного view_tovar.
+        ],
+        "actions": ["view", "add", "change"],
+        "extra": [],
+    },
 
-    "Менеджер по закупкам": {"models": ["postavshchik", "postavka", "tovar", "zayavka"],
-                             "actions": ["view", "add", "change"], "extra": ["approve_zayavka"]},
+    # Менеджер по закупкам — работа с поставщиками/поставками/товарами,
+    # а также проведение заявок.
+    "Менеджер по закупкам": {
+        "models": [
+            "postavshchik", "postavka",
+            "tovar", "gruppatovarov", "edinitsaizmereniya",
+            "bank",
+            "zayavka", "zayavkaitem",
+        ],
+        "actions": ["view", "add", "change"],
+        "extra": ["approve_zayavka"],
+    },
 
-    "Бухгалтер магазина": {"models": ["rabotnik", "zapisitrudknizhke", "mestoraboty"],
-                           "actions": ["view", "add", "change"], "extra": []},
+    # Бухгалтер магазина — кадровый контур + кадровые справочники (в т.ч. "Должности")
+    "Бухгалтер магазина": {
+        "models": [
+            # персонал
+            "rabotnik", "zapisitrudknizhke", "mestoraboty",
+            # кадровые справочники
+            "dolzhnost", "professiya", "specialnost", "klassifikaciya", "struktpodrazdelenie",
+            # адресные справочники (для заполнения карточек)
+            "strana", "gorod", "ulitsa",
+        ],
+        "actions": ["view", "add", "change"],
+        "extra": [],
+    },
 }
+
 
 @receiver(post_migrate)
 def create_groups_and_perms(sender, **kwargs):

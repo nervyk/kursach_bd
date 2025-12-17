@@ -1,35 +1,96 @@
 {% extends "ui/base.html" %}
 {% block title %}{{ title }}{% endblock %}
+
 {% block content %}
-<h3 class="mb-3">{{ title }}</h3>
+<style>
+  .soft-card { border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+  .soft-card .card-header { background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.08); }
+  .btn-icon { display: inline-flex; align-items: center; gap: .4rem; }
+  .hint { font-size: .875rem; opacity: .75; }
 
-<form method="post" class="card card-body">
+  /* form.as_p аккуратнее */
+  form.card p { margin-bottom: .9rem; }
+  form.card label { font-weight: 600; margin-bottom: .35rem; }
+  form.card input, form.card select, form.card textarea { border-radius: 12px; }
+  form.card .helptext { display:block; margin-top:.25rem; opacity:.75; font-size:.875rem; }
+  form.card ul.errorlist { list-style:none; padding-left:0; margin:.35rem 0 0; }
+  form.card ul.errorlist li { color:#ffb4b4; font-size:.9rem; }
+
+  .table thead th { font-weight: 600; }
+  .table tbody tr:hover { transform: translateY(-1px); transition: .12s ease; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h3 class="m-0">{{ title }}</h3>
+    <div class="hint">Заполните данные заявки и позиции</div>
+  </div>
+  <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle">
+    Заявка
+  </span>
+</div>
+
+<form method="post" class="card soft-card shadow-sm">
   {% csrf_token %}
-  {{ form.as_p }}
 
-  <hr class="my-3">
-  <h5>Позиции заявки</h5>
-  {{ formset.management_form }}
+  <div class="card-header py-3">
+    <div class="fw-semibold">Основные данные</div>
+  </div>
 
-  <table class="table table-sm">
-    <thead>
-      <tr>
-        <th>Товар</th>
-        <th style="width:160px;">Кол-во</th>
-        <th style="width:120px;">Удалить</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for f in formset %}
-      <tr>
-        <td>{{ f.id_tovar }}</td>
-        <td>{{ f.kolichestvo }}</td>
-        <td>{% if f.instance.pk %}{{ f.DELETE }}{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="card-body">
+    {{ form.as_p }}
+  </div>
 
-  <button class="btn btn-primary" type="submit">Сохранить</button>
+  <div class="card-header py-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div class="fw-semibold">Позиции заявки</div>
+      <span class="text-muted small">Можно отмечать на удаление</span>
+    </div>
+  </div>
+
+  <div class="card-body pt-3">
+    {{ formset.management_form }}
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr class="text-nowrap">
+            <th class="ps-3">Товар</th>
+            <th style="width: 180px;" class="text-end">Кол-во</th>
+            <th style="width: 140px;" class="text-center pe-3">Удалить</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in formset %}
+          <tr>
+            <td class="ps-3">{{ f.id_tovar }}</td>
+            <td class="text-end">{{ f.kolichestvo }}</td>
+            <td class="text-center pe-3">
+              {% if f.instance.pk %}
+                <div class="form-check d-inline-flex align-items-center gap-2 m-0">
+                  {{ f.DELETE }}
+                  <label class="form-check-label text-muted small">удалить</label>
+                </div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary btn-icon" type="submit">
+        <span aria-hidden="true">💾</span><span>Сохранить</span>
+      </button>
+      <a class="btn btn-outline-secondary btn-icon" href="javascript:history.back()">
+        <span aria-hidden="true">↩️</span><span>Назад</span>
+      </a>
+    </div>
+  </div>
 </form>
 {% endblock %}

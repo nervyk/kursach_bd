@@ -116,7 +116,7 @@ class Magazin(models.Model):
     familiya_direktora = models.CharField(max_length=25, null=True, blank=True)
     imya_direktora = models.CharField(max_length=25, null=True, blank=True)
     otchestvo_direktora = models.CharField(max_length=25, null=True, blank=True)
-
+    nomer_doma = models.CharField(max_length=10, null=True, blank=True)
     id_strana = models.ForeignKey(Strana, on_delete=models.PROTECT, null=True, blank=True, db_column="id_strana")
     id_gorod = models.ForeignKey(Gorod, on_delete=models.PROTECT, null=True, blank=True, db_column="id_gorod")
     id_ulica = models.ForeignKey(Ulitsa, on_delete=models.PROTECT, null=True, blank=True, db_column="id_ulica")

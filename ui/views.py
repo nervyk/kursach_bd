@@ -5,11 +5,6 @@ import re
 from datetime import date, timedelta
 from decimal import Decimal
 
-# third-party
-from openpyxl import Workbook
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-
 # django
 from django.contrib import messages
 from django.contrib.auth.mixins import (
@@ -19,16 +14,22 @@ from django.contrib.auth.mixins import (
 from django.contrib.auth.models import User
 from django.db import connection, transaction
 from django.db.models import (
+    Count,
     DecimalField,
     ExpressionWrapper,
     F,
+    Prefetch,
     Q,
     Sum,
 )
+
+
+
 from django.db.models.functions import Coalesce
 from django.forms import inlineformset_factory
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
+from django.core.exceptions import PermissionDenied
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import (
@@ -56,6 +57,16 @@ from core.models import (
     Vyruchka,
     Zayavka,
     ZayavkaItem,
+    Strana, 
+    Gorod, 
+    Ulitsa,
+    Professiya, 
+    Specialnost, 
+    Klassifikaciya, 
+    StruktPodrazdelenie,
+    MestoRaboty, 
+    ZapisiTrudKnizhke,
+
 )
 from core.services import (
     StockError,
@@ -81,52 +92,23 @@ from .forms import (
     VyruchkaForm,
     ZayavkaForm,
     ZayavkaItemForm,
+    StranaForm, 
+    GorodForm, 
+    UlitsaForm,
+    ProfessiyaForm, 
+    SpecialnostForm, 
+    KlassifikaciyaForm, 
+    StruktPodrazdelenieForm,
+    MestoRabotyForm, 
+    ZapisiTrudKnizhkeForm,
+
+
 )
 from .mixins import (
     OwnerOnlyMixin,
     ScopeByMagazinMixin,
     SortSearchListMixin,
 )
-from core.models import Strana, Gorod, Ulitsa
-from .forms import StranaForm, GorodForm, UlitsaForm
-from .views import GenericListView, col
-
-
-class StranaListView(GenericListView):
-    permission_required = "core.view_strana"
-    add_perm = "core.add_strana"
-    change_perm = "core.change_strana"
-    delete_perm = "core.delete_strana"
-    model = Strana
-    title = "Страны"
-    columns = [col("id", "ID"), col("nazvanie", "Название")]
-    allowed_sort = ("id", "nazvanie")
-    add_url_name = "strana_add"
-    edit_url_name = "strana_edit"
-    delete_url_name = "strana_delete"
-
-    def apply_search(self, qs, q: str):
-        return qs.filter(nazvanie__icontains=q)
-
-class StranaCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    permission_required = "core.add_strana"
-    model = Strana
-    form_class = StranaForm
-    template_name = "ui/form.html"
-    success_url = reverse_lazy("strana_list")
-
-class StranaUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    permission_required = "core.change_strana"
-    model = Strana
-    form_class = StranaForm
-    template_name = "ui/form.html"
-    success_url = reverse_lazy("strana_list")
-
-class StranaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
-    permission_required = "core.delete_strana"
-    model = Strana
-    template_name = "ui/confirm_delete.html"
-    success_url = reverse_lazy("strana_list")
 
 
 
@@ -305,6 +287,40 @@ class SpravochnikHomeView(LoginRequiredMixin, TemplateView):
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "ui/home.html"
 
+class UserGuideView(LoginRequiredMixin, TemplateView):
+    template_name = "ui/help_user_guide.html"
+
+
+class AboutView(LoginRequiredMixin, TemplateView):
+    template_name = "ui/help_about.html"
+
+
+class SettingsView(LoginRequiredMixin, TemplateView):
+    template_name = "ui/settings.html"
+
+    FONT_SCALES = {
+        "0.90": "Уменьшенный",
+        "1.00": "Обычный",
+        "1.15": "Крупный",
+        "1.30": "Очень крупный",
+    }
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        current = str(self.request.session.get("font_scale", "1.00"))
+        if current not in self.FONT_SCALES:
+            current = "1.00"
+        ctx.update({"font_scales": self.FONT_SCALES, "current_scale": current})
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        scale = (request.POST.get("font_scale") or "").strip()
+        if scale in self.FONT_SCALES:
+            request.session["font_scale"] = scale
+            messages.success(request, f"Шрифт: {self.FONT_SCALES[scale]}")
+        else:
+            messages.error(request, "Некорректное значение настройки")
+        return redirect("settings")
 
 
 
@@ -392,13 +408,33 @@ class VyruchkaListView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMagaz
     paginate_by = 20
     allowed_sort = ("id", "data", "qty", "amount")
 
-    def get_queryset(self):
-        qs = super().get_queryset().annotate(
-            qty=Coalesce(Sum("tovarvyruchka__kolichestvo"), 0),
-            amount=Coalesce(Sum("tovarvyruchka__summa"), Decimal("0")),
+    def apply_search(self, qs, q: str):
+        return qs.filter(
+            Q(id_magazin__nazvanie__icontains=q)
+            | Q(id_rabotnik__familiya__icontains=q)
+            | Q(id_rabotnik__imya__icontains=q)
+            | Q(id_rabotnik__otchestvo__icontains=q)
         )
 
-        # ✅ ограничение по магазину
+    def get_queryset(self):
+        qs = (
+            super()
+            .get_queryset()
+            .select_related("id_magazin", "id_rabotnik")
+            .prefetch_related(
+                Prefetch(
+                    "tovarvyruchka_set",
+                    queryset=TovarVyruchka.objects.select_related("id_tovar").order_by("id"),
+                )
+            )
+            .annotate(
+                qty=Coalesce(Sum("tovarvyruchka__kolichestvo"), 0),
+                amount=Coalesce(Sum("tovarvyruchka__summa"), Decimal("0")),
+                items_cnt=Coalesce(Count("tovarvyruchka", distinct=True), 0),
+            )
+        )
+
+
         qs = self.scope_qs(qs, "id_magazin")
 
         q = self.get_search_q()
@@ -408,6 +444,7 @@ class VyruchkaListView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMagaz
         sort, direction = self.get_sort()
         order = f"-{sort}" if direction == "desc" else sort
         return qs.order_by(order)
+
 
 class VyruchkaCreateView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
     permission_required = "core.add_vyruchka"
@@ -421,17 +458,12 @@ class VyruchkaCreateView(LoginRequiredMixin, PermissionRequiredMixin, TemplateVi
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-        # ВАЖНО: передаем user, иначе фильтрация магазинов/работников не отработает
         form = VyruchkaForm(request.POST, user=request.user)
         formset = VyruchkaItemsFormSet(request.POST)
 
         if form.is_valid() and formset.is_valid():
-            # 1) создаем шапку выручки
             vyr = form.save(commit=False)
             vyr.save()
-
-            # 2) списываем товары со склада магазина (magazin_tovar)
-            #    delta>0 => списать (см. apply_vyruchka_stock)
             new_map = _qty_map_from_formset(formset)
             try:
                 apply_vyruchka_stock(vyr.id_magazin_id, new_map)
@@ -439,8 +471,7 @@ class VyruchkaCreateView(LoginRequiredMixin, PermissionRequiredMixin, TemplateVi
                 transaction.set_rollback(True)
                 messages.error(request, str(e))
                 return self.render_to_response({"form": form, "formset": formset, "title": "Добавить выручку"})
-
-            # 3) сохраняем позиции
+            
             items = formset.save(commit=False)
             for it in items:
                 if it.cena_prodazhi is None:
@@ -484,17 +515,14 @@ class VyruchkaUpdateView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMag
         formset = VyruchkaItemsFormSet(request.POST, instance=vyr)
 
         if form.is_valid() and formset.is_valid():
-            # старые количества из БД
             old_map = {}
             for it in TovarVyruchka.objects.filter(id_vyruchka=vyr).only("id_tovar_id", "kolichestvo"):
                 tid = int(it.id_tovar_id)
                 old_map[tid] = old_map.get(tid, 0) + int(it.kolichestvo or 0)
 
-            # новые количества из формы
             new_map = _qty_map_from_formset(formset)
 
-            # delta = old - new:
-            #   >0 вернуть на склад, <0 списать со склада
+
             delta = {}
             for tid in set(old_map) | set(new_map):
                 delta[tid] = old_map.get(tid, 0) - new_map.get(tid, 0)
@@ -533,7 +561,7 @@ class VyruchkaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMag
         back = {}
         for it in TovarVyruchka.objects.filter(id_vyruchka=obj).only("id_tovar_id", "kolichestvo"):
             tid = int(it.id_tovar_id)
-            back[tid] = back.get(tid, 0) - int(it.kolichestvo or 0)  # минус => вернуть
+            back[tid] = back.get(tid, 0) - int(it.kolichestvo or 0) 
 
         try:
             apply_vyruchka_stock(obj.id_magazin_id, back)
@@ -552,7 +580,7 @@ class VyruchkaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMag
         qs = super().get_queryset()
         return self.scope_qs(qs, "id_magazin")
 
-# ---- универсальные колонки для list.html
+
 def col(field, label, align="left"):
     return {"field": field, "label": label, "align": align}
 
@@ -568,7 +596,7 @@ class GenericListView(LoginRequiredMixin, PermissionRequiredMixin, SortSearchLis
     edit_url_name = None
     delete_url_name = None
 
-    # какие права проверять для кнопок
+
     add_perm = None
     change_perm = None
     delete_perm = None
@@ -591,6 +619,121 @@ class GenericListView(LoginRequiredMixin, PermissionRequiredMixin, SortSearchLis
         return ctx
 
 # ====== Справочники ======
+class StranaListView(GenericListView):
+    permission_required = "core.view_strana"
+    add_perm = "core.add_strana"
+    change_perm = "core.change_strana"
+    delete_perm = "core.delete_strana"
+    model = Strana
+    title = "Страны"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "strana_add"
+    edit_url_name = "strana_edit"
+    delete_url_name = "strana_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class StranaCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_strana"
+    model = Strana
+    form_class = StranaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("strana_list")
+
+class StranaUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_strana"
+    model = Strana
+    form_class = StranaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("strana_list")
+
+class StranaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_strana"
+    model = Strana
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("strana_list")
+
+
+class GorodListView(GenericListView):
+    permission_required = "core.view_gorod"
+    add_perm = "core.add_gorod"
+    change_perm = "core.change_gorod"
+    delete_perm = "core.delete_gorod"
+    model = Gorod
+    title = "Города"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "gorod_add"
+    edit_url_name = "gorod_edit"
+    delete_url_name = "gorod_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class GorodCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_gorod"
+    model = Gorod
+    form_class = GorodForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("gorod_list")
+
+class GorodUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_gorod"
+    model = Gorod
+    form_class = GorodForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("gorod_list")
+
+class GorodDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_gorod"
+    model = Gorod
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("gorod_list")
+
+
+class UlitsaListView(GenericListView):
+    permission_required = "core.view_ulitsa"
+    add_perm = "core.add_ulitsa"
+    change_perm = "core.change_ulitsa"
+    delete_perm = "core.delete_ulitsa"
+    model = Ulitsa
+    title = "Улицы"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "ulitsa_add"
+    edit_url_name = "ulitsa_edit"
+    delete_url_name = "ulitsa_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class UlitsaCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_ulitsa"
+    model = Ulitsa
+    form_class = UlitsaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("ulitsa_list")
+
+class UlitsaUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_ulitsa"
+    model = Ulitsa
+    form_class = UlitsaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("ulitsa_list")
+
+class UlitsaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_ulitsa"
+    model = Ulitsa
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("ulitsa_list")
 
 class GruppaTovarovListView(GenericListView):
     permission_required = "core.view_gruppatovarov"
@@ -767,6 +910,284 @@ class DolzhnostDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteVie
     template_name = "ui/confirm_delete.html"
     success_url = reverse_lazy("dolzhnost_list")
 
+# ====== Кадровые справочники ======
+
+class ProfessiyaListView(GenericListView):
+    permission_required = "core.view_professiya"
+    add_perm = "core.add_professiya"
+    change_perm = "core.change_professiya"
+    delete_perm = "core.delete_professiya"
+    model = Professiya
+    title = "Профессии"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "professiya_add"
+    edit_url_name = "professiya_edit"
+    delete_url_name = "professiya_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class ProfessiyaCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_professiya"
+    model = Professiya
+    form_class = ProfessiyaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("professiya_list")
+
+class ProfessiyaUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_professiya"
+    model = Professiya
+    form_class = ProfessiyaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("professiya_list")
+
+class ProfessiyaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_professiya"
+    model = Professiya
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("professiya_list")
+
+
+class SpecialnostListView(GenericListView):
+    permission_required = "core.view_specialnost"
+    add_perm = "core.add_specialnost"
+    change_perm = "core.change_specialnost"
+    delete_perm = "core.delete_specialnost"
+    model = Specialnost
+    title = "Специальности"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "specialnost_add"
+    edit_url_name = "specialnost_edit"
+    delete_url_name = "specialnost_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class SpecialnostCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_specialnost"
+    model = Specialnost
+    form_class = SpecialnostForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("specialnost_list")
+
+class SpecialnostUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_specialnost"
+    model = Specialnost
+    form_class = SpecialnostForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("specialnost_list")
+
+class SpecialnostDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_specialnost"
+    model = Specialnost
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("specialnost_list")
+
+
+class KlassifikaciyaListView(GenericListView):
+    permission_required = "core.view_klassifikaciya"
+    add_perm = "core.add_klassifikaciya"
+    change_perm = "core.change_klassifikaciya"
+    delete_perm = "core.delete_klassifikaciya"
+    model = Klassifikaciya
+    title = "Квалификации"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "klassifikaciya_add"
+    edit_url_name = "klassifikaciya_edit"
+    delete_url_name = "klassifikaciya_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class KlassifikaciyaCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_klassifikaciya"
+    model = Klassifikaciya
+    form_class = KlassifikaciyaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("klassifikaciya_list")
+
+class KlassifikaciyaUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_klassifikaciya"
+    model = Klassifikaciya
+    form_class = KlassifikaciyaForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("klassifikaciya_list")
+
+class KlassifikaciyaDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_klassifikaciya"
+    model = Klassifikaciya
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("klassifikaciya_list")
+
+
+class StruktPodrazdelenieListView(GenericListView):
+    permission_required = "core.view_struktpodrazdelenie"
+    add_perm = "core.add_struktpodrazdelenie"
+    change_perm = "core.change_struktpodrazdelenie"
+    delete_perm = "core.delete_struktpodrazdelenie"
+    model = StruktPodrazdelenie
+    title = "Структурные подразделения"
+    columns = [col("id", "ID"), col("nazvanie", "Название")]
+    search_placeholder = "Поиск: название"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "strukt_add"
+    edit_url_name = "strukt_edit"
+    delete_url_name = "strukt_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(nazvanie__icontains=q)
+
+class StruktPodrazdelenieCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_struktpodrazdelenie"
+    model = StruktPodrazdelenie
+    form_class = StruktPodrazdelenieForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("strukt_list")
+
+class StruktPodrazdelenieUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_struktpodrazdelenie"
+    model = StruktPodrazdelenie
+    form_class = StruktPodrazdelenieForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("strukt_list")
+
+class StruktPodrazdelenieDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_struktpodrazdelenie"
+    model = StruktPodrazdelenie
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("strukt_list")
+# ===== Кадровые документы =====
+
+class MestoRabotyListView(GenericListView):
+    permission_required = "core.view_mestoraboty"
+    add_perm = "core.add_mestoraboty"
+    change_perm = "core.change_mestoraboty"
+    delete_perm = "core.delete_mestoraboty"
+    model = MestoRaboty
+    title = "Места работы"
+    columns = [
+        col("id", "ID"),
+        col("nazvanie", "Название"),
+        col("id_strana", "Страна"),
+        col("id_gorod", "Город"),
+        col("id_ulica", "Улица"),
+        col("nomer_doma", "Дом"),
+    ]
+    search_placeholder = "Поиск: название/город"
+    allowed_sort = ("id", "nazvanie")
+    sort_options = [("id", "ID"), ("nazvanie", "Название")]
+    add_url_name = "mestoraboty_add"
+    edit_url_name = "mestoraboty_edit"
+    delete_url_name = "mestoraboty_delete"
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(Q(nazvanie__icontains=q) | Q(id_gorod__nazvanie__icontains=q))
+
+class MestoRabotyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_mestoraboty"
+    model = MestoRaboty
+    form_class = MestoRabotyForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("mestoraboty_list")
+
+class MestoRabotyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    permission_required = "core.change_mestoraboty"
+    model = MestoRaboty
+    form_class = MestoRabotyForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("mestoraboty_list")
+
+class MestoRabotyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    permission_required = "core.delete_mestoraboty"
+    model = MestoRaboty
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("mestoraboty_list")
+
+
+class ZapisiTrudKnizhkeListView(ScopeByMagazinMixin, GenericListView):
+    permission_required = "core.view_zapisitrudknizhke"
+    add_perm = "core.add_zapisitrudknizhke"
+    change_perm = "core.change_zapisitrudknizhke"
+    delete_perm = "core.delete_zapisitrudknizhke"
+    model = ZapisiTrudKnizhke
+    title = "Трудовая книжка (кадровые события)"
+    columns = [
+        col("id", "ID"),
+        col("id_rabotnika", "Работник"),
+        col("vid_dokumenta", "Вид документа"),
+        col("vid_meropriyatiya", "Мероприятие"),
+        col("data", "Дата"),
+        col("nomer", "Номер"),
+        col("id_dolzhnosti", "Должность"),
+        col("id_mesto_raboty", "Место работы"),
+    ]
+    search_placeholder = "Поиск: работник / документ / место"
+    allowed_sort = ("id", "data", "vid_dokumenta")
+    sort_options = [("id", "ID"), ("data", "Дата"), ("vid_dokumenta", "Вид")]
+    add_url_name = "trud_add"
+    edit_url_name = "trud_edit"
+    delete_url_name = "trud_delete"
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("id_rabotnika", "id_mesto_raboty", "id_dolzhnosti")
+        return self.scope_qs(qs, "id_rabotnika__id_otdela__id_magazin")
+
+    def apply_search(self, qs, q: str):
+        return qs.filter(
+            Q(id_rabotnika__familiya__icontains=q)
+            | Q(id_rabotnika__imya__icontains=q)
+            | Q(id_rabotnika__otchestvo__icontains=q)
+            | Q(nomer__icontains=q)
+            | Q(id_mesto_raboty__nazvanie__icontains=q)
+        )
+
+class ZapisiTrudKnizhkeCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = "core.add_zapisitrudknizhke"
+    model = ZapisiTrudKnizhke
+    form_class = ZapisiTrudKnizhkeForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("trud_list")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+class ZapisiTrudKnizhkeUpdateView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMagazinMixin, UpdateView):
+    permission_required = "core.change_zapisitrudknizhke"
+    model = ZapisiTrudKnizhke
+    form_class = ZapisiTrudKnizhkeForm
+    template_name = "ui/form.html"
+    success_url = reverse_lazy("trud_list")
+
+    def get_queryset(self):
+        return self.scope_qs(super().get_queryset(), "id_rabotnika__id_otdela__id_magazin")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+class ZapisiTrudKnizhkeDeleteView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMagazinMixin, DeleteView):
+    permission_required = "core.delete_zapisitrudknizhke"
+    model = ZapisiTrudKnizhke
+    template_name = "ui/confirm_delete.html"
+    success_url = reverse_lazy("trud_list")
+
+    def get_queryset(self):
+        return self.scope_qs(super().get_queryset(), "id_rabotnika__id_otdela__id_magazin")
+
+
 
 class OtdelListView(ScopeByMagazinMixin, GenericListView):
     permission_required = "core.view_otdel"
@@ -831,6 +1252,7 @@ class MagazinListView(GenericListView):
         col("id_strana", "Страна"),
         col("id_gorod", "Город"),
         col("id_ulica", "Улица"),
+        col("nomer_doma", "Дом"),
     ]
     search_placeholder = "Поиск: название / директор / город"
     allowed_sort = ("id", "nazvanie")
@@ -982,76 +1404,143 @@ class RabotnikDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
 
 
 
-class AnalyticsView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
-    # можно привязать к праву просмотра выручки
+class AnalyticsView(LoginRequiredMixin, PermissionRequiredMixin, ScopeByMagazinMixin, TemplateView):
     permission_required = "core.view_vyruchka"
     template_name = "ui/analytics.html"
 
     def _parse_date(self, s: str):
         try:
-            y, m, d = map(int, s.split("-"))
+            y, m, d = map(int, (s or "").split("-"))
             return date(y, m, d)
         except Exception:
             return None
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-
-        # диапазон по умолчанию: последние 30 дней
+    def _date_range(self):
         to_s = self.request.GET.get("to") or ""
         from_s = self.request.GET.get("from") or ""
         to_d = self._parse_date(to_s) or date.today()
         from_d = self._parse_date(from_s) or (to_d - timedelta(days=30))
+        return from_d, to_d
 
-        qs = Vyruchka.objects.filter(data__isnull=False, data__range=(from_d, to_d))
+    def _selected_magazin_id(self) -> int:
+        """
+        Для владельца сети разрешаем выбрать магазин через GET ?magazin=ID (0 = все).
+        Для остальных — фильтр по магазину пользователя (скоупинг) и это поле не учитываем.
+        """
+        if not self.is_network_owner():
+            return 0
+        raw = (self.request.GET.get("magazin") or "").strip()
+        try:
+            return int(raw) if raw else 0
+        except Exception:
+            return 0
 
+    def _amount_expr(self):
+        """
+        Сумма строки продажи:
+        - если в строке заполнено `summa` — берём её
+        - иначе считаем kolichestvo * cena_prodazhi (сначала из строки, иначе из товара)
+        """
+        qty = Coalesce(F("kolichestvo"), 0)
+        price = Coalesce(F("cena_prodazhi"), F("id_tovar__cena_prodazhi"), Decimal("0"))
+        calc = ExpressionWrapper(qty * price, output_field=DecimalField(max_digits=14, decimal_places=2))
+        return Coalesce(F("summa"), calc, Decimal("0"))
+
+    def _base_tvv(self, from_d, to_d):
+        qs = TovarVyruchka.objects.filter(
+            id_vyruchka__data__isnull=False,
+            id_vyruchka__data__range=(from_d, to_d),
+            id_vyruchka__id_magazin__isnull=False,
+        )
+
+        qs = self.scope_qs(qs, "id_vyruchka__id_magazin")
+
+        sel = self._selected_magazin_id()
+        if sel:
+            qs = qs.filter(id_vyruchka__id_magazin_id=sel)
+
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        tab = (self.request.GET.get("tab") or "daily").strip()
+        if tab not in ("daily", "stores", "sellers"):
+            tab = "daily"
+
+        from_d, to_d = self._date_range()
+        amount_expr = self._amount_expr()
+        tvv = self._base_tvv(from_d, to_d)
+
+        # список магазинов для выпадашки (только владельцу сети)
+        magazins = []
+        selected_magazin = 0
+        if self.is_network_owner():
+            magazins = list(Magazin.objects.all().order_by("nazvanie"))
+            selected_magazin = self._selected_magazin_id()
+
+        # -------- Динамика (по дням)
         daily = list(
-            TovarVyruchka.objects.filter(
-                id_vyruchka__data__isnull=False,
-                id_vyruchka__data__range=(from_d, to_d),
-            )
-            .values("id_vyruchka__data")
-            .annotate(
-                qty=Coalesce(Sum("kolichestvo"), 0),
-                amount=Coalesce(Sum("summa"), Decimal("0")),
-            )
-            .order_by("id_vyruchka__data")
+            tvv.values("id_vyruchka__data")
+               .annotate(
+                    qty=Coalesce(Sum("kolichestvo"), 0),
+                    amount=Coalesce(Sum(amount_expr), Decimal("0")),
+               )
+               .order_by("id_vyruchka__data")
         )
 
         total_sum = sum((row["amount"] or Decimal("0") for row in daily), Decimal("0"))
         days_count = len(daily)
         avg_day = (total_sum / days_count) if days_count else Decimal("0")
 
-        # топ товаров (если используешь связку TovarVyruchka)
-        # количество
+        # -------- Топ товаров
         top_qty = list(
-            TovarVyruchka.objects.filter(
-                id_vyruchka__data__isnull=False,
-                id_vyruchka__data__range=(from_d, to_d),
-            )
-            .values("id_tovar__nazvanie")
-            .annotate(qty=Coalesce(Sum("kolichestvo"), 0))
-            .order_by("-qty")[:10]
+            tvv.values("id_tovar__nazvanie")
+               .annotate(qty=Coalesce(Sum("kolichestvo"), 0))
+               .order_by("-qty")[:10]
         )
 
-        # сумма (кол-во * цена продажи) — если цена заполнена
-        amount_expr = ExpressionWrapper(
-            Coalesce(F("kolichestvo"), 0) * Coalesce(F("id_tovar__cena_prodazhi"), Decimal("0")),
-            output_field=DecimalField(max_digits=14, decimal_places=2),
-        )
         top_amount = list(
-            TovarVyruchka.objects.filter(
-                id_vyruchka__data__isnull=False,
-                id_vyruchka__data__range=(from_d, to_d),
+            tvv.values("id_tovar__nazvanie")
+               .annotate(amount=Coalesce(Sum(amount_expr), Decimal("0")))
+               .order_by("-amount")[:10]
+        )
+
+        # -------- По магазинам
+        by_store = list(
+            tvv.values("id_vyruchka__id_magazin__nazvanie")
+               .annotate(
+                    qty=Coalesce(Sum("kolichestvo"), 0),
+                    amount=Coalesce(Sum(amount_expr), Decimal("0")),
+                    checks=Count("id_vyruchka", distinct=True),
+               )
+               .order_by("-amount")
+        )
+
+        # -------- По продавцам
+        by_seller = list(
+            tvv.values(
+                "id_vyruchka__id_magazin__nazvanie",
+                "id_vyruchka__id_rabotnik__familiya",
+                "id_vyruchka__id_rabotnik__imya",
+                "id_vyruchka__id_rabotnik__otchestvo",
             )
-            .values("id_tovar__nazvanie")
-            .annotate(amount=Coalesce(Sum(amount_expr), Decimal("0")))
-            .order_by("-amount")[:10]
+            .annotate(
+                qty=Coalesce(Sum("kolichestvo"), 0),
+                amount=Coalesce(Sum(amount_expr), Decimal("0")),
+                checks=Count("id_vyruchka", distinct=True),
+            )
+            .order_by("-amount")
         )
 
         ctx.update({
+            "tab": tab,
             "from": from_d.isoformat(),
             "to": to_d.isoformat(),
+
+            "magazins": magazins,
+            "selected_magazin": selected_magazin,
+
             "daily": daily,
             "labels": [r["id_vyruchka__data"].isoformat() for r in daily],
             "values": [float(r["amount"] or 0) for r in daily],
@@ -1059,143 +1548,139 @@ class AnalyticsView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
             "avg_day": avg_day,
             "top_qty": top_qty,
             "top_amount": top_amount,
+
+            "by_store": by_store,
+            "by_seller": by_seller,
         })
         return ctx
 
 
-def analytics_export_csv(request):
-    def parse_date(s):
-        try:
-            y, m, d = map(int, s.split("-"))
-            return date(y, m, d)
-        except Exception:
-            return None
+# ----------------- exports -----------------
 
-    to_d = parse_date(request.GET.get("to") or "") or date.today()
-    from_d = parse_date(request.GET.get("from") or "") or (to_d - timedelta(days=30))
+def _parse_date_q(s: str):
+    try:
+        y, m, d = map(int, (s or "").split("-"))
+        return date(y, m, d)
+    except Exception:
+        return None
 
-    daily = list(
-        TovarVyruchka.objects.filter(
-            id_vyruchka__data__isnull=False,
-            id_vyruchka__data__range=(from_d, to_d),
-        )
-        .values("id_vyruchka__data")
-        .annotate(
-            qty=Coalesce(Sum("kolichestvo"), 0),
-            amount=Coalesce(Sum("summa"), Decimal("0")),
-        )
-        .order_by("id_vyruchka__data")
+
+def _daterange_from_request(request):
+    to_d = _parse_date_q(request.GET.get("to") or "") or date.today()
+    from_d = _parse_date_q(request.GET.get("from") or "") or (to_d - timedelta(days=30))
+    return from_d, to_d
+
+
+def _is_network_owner(user) -> bool:
+    return bool(user.is_superuser or user.groups.filter(name="Владелец сети").exists())
+
+
+def _scoped_tvv(request, from_d, to_d):
+    tvv = TovarVyruchka.objects.filter(
+        id_vyruchka__data__isnull=False,
+        id_vyruchka__data__range=(from_d, to_d),
+        id_vyruchka__id_magazin__isnull=False,
     )
+
+    if _is_network_owner(request.user):
+        # владелец сети может выбрать магазин
+        raw = (request.GET.get("magazin") or "").strip()
+        try:
+            sel = int(raw) if raw else 0
+        except Exception:
+            sel = 0
+        if sel:
+            tvv = tvv.filter(id_vyruchka__id_magazin_id=sel)
+        return tvv
+
+    # не владелец: режем по магазину из профиля
+    prof = getattr(request.user, "profile", None)
+    mid = getattr(prof, "id_magazin_id", None) or 0
+    if not mid:
+        return tvv.none()
+    return tvv.filter(id_vyruchka__id_magazin_id=mid)
+
+
+def _amount_expr():
+    qty = Coalesce(F("kolichestvo"), 0)
+    price = Coalesce(F("cena_prodazhi"), F("id_tovar__cena_prodazhi"), Decimal("0"))
+    calc = ExpressionWrapper(qty * price, output_field=DecimalField(max_digits=14, decimal_places=2))
+    return Coalesce(F("summa"), calc, Decimal("0"))
+
+
+def analytics_export_csv(request):
+    mode = (request.GET.get("mode") or "daily").strip()
+    if mode not in ("daily", "stores", "sellers"):
+        mode = "daily"
+
+    from_d, to_d = _daterange_from_request(request)
+    tvv = _scoped_tvv(request, from_d, to_d)
+    amount_expr = _amount_expr()
 
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = 'attachment; filename="analytics_vyruchka.csv"'
-
     w = csv.writer(resp)
-    w.writerow(["date", "qty", "amount"])
-    for r in daily:
-        w.writerow([r["id_vyruchka__data"].isoformat(), r["qty"], r["amount"]])
 
-    return resp
-
-def analytics_export_xlsx(request):
-    # тот же daily что в CSV
-    def parse_date(s):
-        try:
-            y, m, d = map(int, s.split("-"))
-            return date(y, m, d)
-        except Exception:
-            return None
-
-    to_d = parse_date(request.GET.get("to") or "") or date.today()
-    from_d = parse_date(request.GET.get("from") or "") or (to_d - timedelta(days=30))
-
-    daily = list(
-        TovarVyruchka.objects.filter(
-            id_vyruchka__data__isnull=False,
-            id_vyruchka__data__range=(from_d, to_d),
+    if mode == "daily":
+        resp["Content-Disposition"] = 'attachment; filename="analytics_daily.csv"'
+        rows = list(
+            tvv.values("id_vyruchka__data")
+               .annotate(qty=Coalesce(Sum("kolichestvo"), 0), amount=Coalesce(Sum(amount_expr), Decimal("0")))
+               .order_by("id_vyruchka__data")
         )
-        .values("id_vyruchka__data")
-        .annotate(qty=Coalesce(Sum("kolichestvo"), 0), amount=Coalesce(Sum("summa"), Decimal("0")))
-        .order_by("id_vyruchka__data")
-    )
+        w.writerow(["date", "qty", "amount"])
+        for r in rows:
+            w.writerow([r["id_vyruchka__data"].isoformat(), r["qty"], r["amount"]])
+        return resp
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Выручка"
-    ws.append(["Дата", "Кол-во", "Сумма"])
-    for r in daily:
-        ws.append([r["id_vyruchka__data"].isoformat(), int(r["qty"]), float(r["amount"])])
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-
-    resp = HttpResponse(
-        buf.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-    resp["Content-Disposition"] = 'attachment; filename="analytics_vyruchka.xlsx"'
-    return resp
-
-
-def analytics_export_pdf(request):
-    def parse_date(s):
-        try:
-            y, m, d = map(int, s.split("-"))
-            return date(y, m, d)
-        except Exception:
-            return None
-
-    to_d = parse_date(request.GET.get("to") or "") or date.today()
-    from_d = parse_date(request.GET.get("from") or "") or (to_d - timedelta(days=30))
-
-    daily = list(
-        TovarVyruchka.objects.filter(
-            id_vyruchka__data__isnull=False,
-            id_vyruchka__data__range=(from_d, to_d),
+    if mode == "stores":
+        resp["Content-Disposition"] = 'attachment; filename="analytics_by_store.csv"'
+        rows = list(
+            tvv.values("id_vyruchka__id_magazin__nazvanie")
+               .annotate(
+                    checks=Count("id_vyruchka", distinct=True),
+                    qty=Coalesce(Sum("kolichestvo"), 0),
+                    amount=Coalesce(Sum(amount_expr), Decimal("0")),
+               )
+               .order_by("-amount")
         )
-        .values("id_vyruchka__data")
-        .annotate(qty=Coalesce(Sum("kolichestvo"), 0), amount=Coalesce(Sum("summa"), Decimal("0")))
-        .order_by("id_vyruchka__data")
+        w.writerow(["magazin", "checks", "qty", "amount"])
+        for r in rows:
+            w.writerow([r["id_vyruchka__id_magazin__nazvanie"], r["checks"], r["qty"], r["amount"]])
+        return resp
+
+    # sellers
+    resp["Content-Disposition"] = 'attachment; filename="analytics_by_seller.csv"'
+    rows = list(
+        tvv.values(
+            "id_vyruchka__id_magazin__nazvanie",
+            "id_vyruchka__id_rabotnik__familiya",
+            "id_vyruchka__id_rabotnik__imya",
+            "id_vyruchka__id_rabotnik__otchestvo",
+        )
+        .annotate(
+            checks=Count("id_vyruchka", distinct=True),
+            qty=Coalesce(Sum("kolichestvo"), 0),
+            amount=Coalesce(Sum(amount_expr), Decimal("0")),
+        )
+        .order_by("-amount")
     )
-
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    w, h = A4
-    y = h - 50
-
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(40, y, f"Отчет по выручке: {from_d.isoformat()} — {to_d.isoformat()}")
-    y -= 30
-
-    c.setFont("Helvetica", 10)
-    c.drawString(40, y, "Дата")
-    c.drawString(160, y, "Кол-во")
-    c.drawString(240, y, "Сумма")
-    y -= 15
-
-    for r in daily[:200]:
-        if y < 60:
-            c.showPage()
-            y = h - 50
-            c.setFont("Helvetica", 10)
-        c.drawString(40, y, r["id_vyruchka__data"].isoformat())
-        c.drawRightString(210, y, str(int(r["qty"])))
-        c.drawRightString(320, y, str(r["amount"]))
-        y -= 14
-
-    c.showPage()
-    c.save()
-    buf.seek(0)
-
-    resp = HttpResponse(buf.getvalue(), content_type="application/pdf")
-    resp["Content-Disposition"] = 'attachment; filename="analytics_vyruchka.pdf"'
+    w.writerow(["magazin", "seller", "checks", "qty", "amount"])
+    for r in rows:
+        fio = " ".join(x for x in [
+            r["id_vyruchka__id_rabotnik__familiya"],
+            r["id_vyruchka__id_rabotnik__imya"],
+            r["id_vyruchka__id_rabotnik__otchestvo"],
+        ] if x)
+        w.writerow([r["id_vyruchka__id_magazin__nazvanie"], fio, r["checks"], r["qty"], r["amount"]])
     return resp
+
+
+
 
 class SqlConsoleView(LoginRequiredMixin, TemplateView):
     template_name = "ui/sql_console.html"
 
-    # Блокируем только реальные DDL/DML токены, а не подстроки типа created_at/comment
+
     FORBIDDEN_RE = re.compile(
         r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|vacuum|analyze)\b",
         re.IGNORECASE,
@@ -1206,7 +1691,7 @@ class SqlConsoleView(LoginRequiredMixin, TemplateView):
         return u.is_superuser or u.has_perm("core.sql_console")
 
     def _sanitize_for_check(self, sql: str) -> str:
-        # убираем комментарии и строковые литералы — чтобы не ловить ключевики внутри '...'
+
         s = re.sub(r"/\*.*?\*/", " ", sql, flags=re.S)
         s = re.sub(r"--.*?$", " ", s, flags=re.M)
         s = re.sub(r"'(?:''|[^'])*'", "''", s)  # строки '...'
@@ -1293,3 +1778,9 @@ class UserDeleteView(LoginRequiredMixin, OwnerOnlyMixin, DeleteView):
     model = User
     template_name = "ui/confirm_delete.html"
     success_url = reverse_lazy("user_list")
+
+def error_404(request, exception):
+    return render(request, "404.html", status=404)
+
+def error_403(request, exception=None):
+    return render(request, "403.html", status=403)

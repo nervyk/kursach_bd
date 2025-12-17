@@ -1,4 +1,5 @@
 from django import template
+from decimal import Decimal, InvalidOperation
 
 register = template.Library()
 
@@ -12,3 +13,4 @@ def in_group(user, group_name: str) -> bool:
         return user.groups.filter(name=group_name).exists()
     except Exception:
         return False
+    

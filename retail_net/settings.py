@@ -23,14 +23,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-legj#6dgh586foudxtx4kfp82raq@v2(@4v1$uisj%-j_8loji'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
-ALLOWED_HOSTS = []
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    "ui",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -38,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     "core.apps.CoreConfig",
-    "ui",
+    
 ]
 
 
@@ -86,7 +87,7 @@ DATABASES = {
         "USER": "postgres",
         "PASSWORD": "123",
         "HOST": "127.0.0.1",
-        "PORT": "5433",
+        "PORT": "5432",
     }
 }
 

@@ -1,12 +1,50 @@
 {% extends "ui/base.html" %}
+{% block title %}Удаление{% endblock %}
+
 {% block content %}
-<h4 class="mb-3">Удаление</h4>
-<form method="post" class="card card-body">
+<style>
+  .soft-card { border: 1px solid rgba(255,255,255,.08); border-radius: 16px; }
+  .soft-card .card-header { background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.08); }
+  .btn-icon { display: inline-flex; align-items: center; gap: .4rem; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="m-0">Удаление</h4>
+    <div class="text-muted">Действие необратимо</div>
+  </div>
+  <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle">
+    Подтверждение
+  </span>
+</div>
+
+<form method="post" class="card soft-card shadow-sm">
   {% csrf_token %}
-  <p>Удалить запись: <strong>{{ object }}</strong>?</p>
-  <div class="d-flex gap-2">
-    <button class="btn btn-danger" type="submit">Удалить</button>
-    <a class="btn btn-secondary" href="javascript:history.back()">Отмена</a>
+
+  <div class="card-header py-3">
+    <div class="d-flex align-items-center justify-content-between">
+      <div class="fw-semibold">Подтвердите удаление</div>
+      <span class="badge rounded-pill bg-secondary-subtle text-secondary border border-secondary-subtle">
+        {{ object|truncatechars:48 }}
+      </span>
+    </div>
+  </div>
+
+  <div class="card-body">
+    <p class="mb-0">
+      Удалить запись: <strong>{{ object }}</strong>?
+    </p>
+  </div>
+
+  <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-danger btn-icon" type="submit">
+        <span aria-hidden="true">🗑️</span><span>Удалить</span>
+      </button>
+      <a class="btn btn-outline-secondary btn-icon" href="javascript:history.back()">
+        <span aria-hidden="true">↩️</span><span>Отмена</span>
+      </a>
+    </div>
   </div>
 </form>
 {% endblock %}
